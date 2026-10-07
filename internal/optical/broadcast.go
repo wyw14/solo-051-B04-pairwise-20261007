@@ -35,13 +35,13 @@ func (b *Broadcaster) Unsubscribe(id int) {
 	b.mu.Unlock()
 }
 func (b *Broadcaster) Publish(sample model.ThicknessSample) {
+	// Sends must happen while holding the read lock: Unsubscribe closes
+	// channels under the write lock, so a send outside the critical
+	// section can race with close and panic. Sends are non-blocking,
+	// so holding RLock across the loop cannot stall subscribers.
 	b.mu.RLock()
-	list := make([]chan model.ThicknessSample, 0, len(b.subscribers))
+	defer b.mu.RUnlock()
 	for _, ch := range b.subscribers {
-		list = append(list, ch)
-	}
-	b.mu.RUnlock()
-	for _, ch := range list {
 		select {
 		case ch <- sample:
 		default:
